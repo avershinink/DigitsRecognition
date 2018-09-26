@@ -2,10 +2,16 @@ import numpy as np
 import _pickle
 import gzip
 import pprint
-import time
 
 class Network(object):
     def __init__(self, sizes, path_to_weights_file = ''):
+        """Building a network from the giving map.
+        sizes[0]    - inputs count
+        sizes[1:-1] - hidden layers
+        sizez[-1]   - outputs count
+
+        path_to_weights_file - path to file with calculated weights data
+        """
         self.num_layers = len(sizes)
         self.sizes = sizes
         # biases/activations is array of arrays
@@ -25,36 +31,23 @@ class Network(object):
         except:
             self.np_weights = np.array([np.array([np.random.random(sizes[x]) for i in range(sizes[x+1])]) for x in range(len(sizes)-1)])
 
-    def train_network(self, training_data, epochs, learning_rate, momentum, decay, test_data = None):
+    def train_network(self, training_data, epochs, learning_rate, mse, momentum, decay, validation_data, test_data = None):
         epoch = 0
-        ransw = self.evaluate(test_data)
-        max_ransw = ransw
-        # learning_ransw = self.evaluate(training_data)
-        while epoch < epochs:
-            # row_index = 0
+        target_mse = mse
+        mse = target_mse + 1
+        while epoch < epochs and mse>target_mse:
             epoch += 1
             mse = 0
-            mean_time = 0 
-            i = 0
             for inputs,expected_result in training_data:
                 self.feedforward(inputs)
                 mse += (expected_result - self.np_activations[-1]) * (expected_result - self.np_activations[-1])
                 self.backprop(expected_result)
-                # start_time = time.time()
-                # for target_list in range(100):
                 self.updateweights(inputs, learning_rate, momentum, decay)
-                # i += 1
-                # mean_time += (time.time() - start_time)
-                # print("\t\tupdateweights --- {0} seconds ---".format(mean_time/i))
-
-            ransw = self.evaluate(test_data)
             mse = np.sum(mse) / len(training_data)
-            if test_data:
-                print("Epoch {0} ({3} as max): {1} / {2}\t mse = {4}".format(epoch, ransw, len(test_data),max_ransw, mse))
-                if(ransw > max_ransw):
-                    max_ransw = ransw
-            else:
-                print("Epoch {0} complete".format(epoch))
+            print("Epoch {0}; \t mse = {1}".format(epoch, mse))
+        if(validation_data):
+            ransw = self.evaluate(validation_data)
+            print("validation_data right answers count {0};".format(ransw))
 
     def feedforward(self, inputs):
         for layer in range(len(self.np_weights)):
@@ -99,40 +92,43 @@ class Network(object):
             layer_index += 1
         pass
 
-    def evaluate(self, test_data):
+    def evaluate(self, test_data, show_erorrs = False):
         right_answ_count = 0
-        wrong_answ = 0
         for td,rd in test_data:
             self.feedforward(td)
             network_answer = np.argmax(self.np_activations[-1])
             if(rd[network_answer] == 1):
                 right_answ_count += 1
             else:
-                if(wrong_answ < 1):
-                    pprint.pprint(self.np_activations[-1])
+                if(show_erorrs):
                     print('nnet answer {0}\t right answer {1}'.format(network_answer,np.argmax(rd)))
-                wrong_answ+=1
-
         return right_answ_count
 
 
 
 def load_data(output_size):
+    """Load the MNIST data in a tuple containing the training data,
+    the validation data, and the test data.
+    """
     f = gzip.open('data/mnist.pkl.gz', 'rb')
     training_data, validation_data, test_data = _pickle.load(f, encoding="latin1")
     f.close()
     #tanh vectorization
     vectorized_test_data = tuple((input, set_answer_vector(np.full(output_size,-1.), answ)) for input, answ in zip(test_data[0], test_data[1]))
     vectorized_training_data = tuple((input, set_answer_vector(np.full(output_size,-1.), answ)) for input, answ in zip(training_data[0], training_data[1]))
-
-    return (vectorized_training_data, validation_data, vectorized_test_data)
+    vectorized_validation_data = tuple((input, set_answer_vector(np.full(output_size,-1.), answ)) for input, answ in zip(validation_data[0], validation_data[1]))
+    return (vectorized_training_data, vectorized_validation_data, vectorized_test_data)
 
 def set_answer_vector(vector, number):
+    """Return a vector with a 1.0 in the 'number'
+    position and -1 elsewhere.
+    Is used to create a desiared output vector from the neural
+    network."""
     vector[number] = 1.0
     return vector
 
 print('Building Network')
-networklayers = [784, 330, 10]
+networklayers = [784, 30, 10]
 net = Network(networklayers,'data/'+str(networklayers)+'.npy')
 print('Network Built')
 
@@ -142,10 +138,12 @@ print('MNIST Data Loaded')
 
 print('Learning using Stochastic gradient descent')
 print('Network training Start')
-net.train_network(training_data, 30, .05, 0.0001, 0.00001, test_data=test_data)
+net.train_network(training_data, 40, .005, 0.02, 0.00001, 0.000001, validation_data = validation_data)
 print('Network training End')
 
-saveYN = input('Save Result? Y/N ')
+print('Processing testing_data...')
+ransw_count = net.evaluate(test_data)
+print('Right answers from test_data {0} out of {1}'.format(ransw_count, len(test_data)))
+saveYN = input('Save Network Weights? Y/N ')
 if(saveYN.lower() == 'y'):
-   np.save('data/'+str(net.sizes), net.np_weights)
-#np.save('data/'+str(net.sizes), net.np_weights)
+    np.save('data/'+str(net.sizes), net.np_weights)
