@@ -138,7 +138,7 @@ print('MNIST Data Loaded')
 
 print('Learning using Stochastic gradient descent')
 print('Network training Start')
-net.train_network(training_data, 40, .005, 0.02, 0.00001, 0.000001, validation_data = validation_data)
+net.train_network(training_data, 200, .005, 0.02, 0.00001, 0.000001, validation_data = validation_data)
 print('Network training End')
 
 print('Processing testing_data...')
